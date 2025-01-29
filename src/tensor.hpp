@@ -6,6 +6,9 @@
 #include <stdexcept>
 #include <vector>
 #include <utility>
+#include <cassert>
+#include <vector>
+#include<type_traits>
 
 #include <fstream>
 #include <sstream>
