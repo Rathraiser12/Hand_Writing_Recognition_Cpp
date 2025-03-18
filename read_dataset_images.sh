@@ -16,4 +16,4 @@ echo "Saving output to $IMAGE_TENSOR_OUTPUT"
 echo "Image index: $IMAGE_INDEX"
 
 # Make sure this path is correct and that mnist_reader is built.
-./build/mnist_reader "$IMAGE_DATASET_INPUT" "$IMAGE_TENSOR_OUTPUT" "$IMAGE_INDEX"
+./build/mnist_io "$IMAGE_DATASET_INPUT" "$IMAGE_TENSOR_OUTPUT" "$IMAGE_INDEX"

@@ -19,4 +19,4 @@ echo "Reading label data from $LABEL_DATASET_INPUT..."
 echo "Saving output to $LABEL_TENSOR_OUTPUT"
 echo "Label index: $LABEL_INDEX"
 
-./build/mnist_reader "$LABEL_DATASET_INPUT" "$LABEL_TENSOR_OUTPUT" "$LABEL_INDEX"
+./build/mnist_io "$LABEL_DATASET_INPUT" "$LABEL_TENSOR_OUTPUT" "$LABEL_INDEX"
