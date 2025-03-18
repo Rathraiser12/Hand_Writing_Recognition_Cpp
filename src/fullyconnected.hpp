@@ -2,7 +2,7 @@
 #define ADVPT_MPU_FULLY_CONNECTED_HPP
 
 #include "Eigen/Dense"
-#include "Optimizers.hpp"
+#include "optimizers.hpp"
 #include <iostream>
 #include <cmath>
 #include <cstdlib>
