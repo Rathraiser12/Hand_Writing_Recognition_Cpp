@@ -11,3 +11,4 @@ src/eigen.cpp
 .vscode
 gmon.out
 log_predictions-ci.txt
+log_predictions.txt
