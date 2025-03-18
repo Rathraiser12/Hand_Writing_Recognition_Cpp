@@ -1,68 +1,66 @@
-#include "mnist_reader.h"  // Declares MNISTReader class with readImageData/readLabelData
-#include "tensor.hpp"      // Declares/defines Tensor<T>, writeTensorToFile, etc.
-
 #include <iostream>
 #include <string>
+#include <stdexcept>
+#include "mnist_reader.h"    // Your MNISTReader class
+#include "tensor.hpp"        // For writeTensorToFile (or include wherever it's defined)
 
-int main(int argc, char* argv[])
+int main(int argc, char** argv)
 {
-    // Expect 5 arguments: 
-    //   1) mode (image|label)
-    //   2) inputFile
-    //   3) outputFile
-    //   4) index
-    //
-    // Example for image:
-    //   ./mnist_reader.exe image mnist-datasets/train-images.idx3-ubyte image_out.txt 0
-    // Example for label:
-    //   ./mnist_reader.exe label mnist-datasets/train-labels.idx1-ubyte label_out.txt 0
-    //
-    if (argc != 5)
+    if (argc != 4)
     {
+        // The project description requires exactly 3 arguments:
+        //   <input_file> <output_file> <index>
+        // For example:
+        //   ./mnist_reader mnist-datasets/train-images.idx3-ubyte image_out.txt 0
+        //   ./mnist_reader mnist-datasets/train-labels.idx1-ubyte label_out.txt 0
         std::cerr << "Usage: " << argv[0]
-                  << " <mode: image|label> <dataset_input> <tensor_output> <index>\n";
+                  << " <dataset_input> <tensor_output> <index>\n\n"
+                  << "Example (images): " << argv[0]
+                  << " mnist-datasets/train-images.idx3-ubyte image_out.txt 0\n"
+                  << "Example (labels): " << argv[0]
+                  << " mnist-datasets/train-labels.idx1-ubyte label_out.txt 0\n";
         return 1;
     }
 
-    // Parse command line
-    std::string mode       = argv[1];
-    std::string inputFile  = argv[2];
-    std::string outputFile = argv[3];
-    int index              = std::stoi(argv[4]);  // which image/label in the dataset
+    // Parse the arguments
+    std::string inputFile  = argv[1];
+    std::string outputFile = argv[2];
+    int index              = std::stoi(argv[3]);
+
+    // Detect if we are reading images or labels by checking the filename
+    // (One approach: "images" => readImageData, "labels" => readLabelData)
+    // You can also check ".idx3-ubyte" vs. ".idx1-ubyte".
+    bool isImage = (inputFile.find("images") != std::string::npos)
+                || (inputFile.find("idx3-ubyte") != std::string::npos);
 
     try
     {
-        if (mode == "image")
+        if (isImage)
         {
-            // Use your existing function to read an MNIST image at `index`
-            Tensor<double> image = MNISTReader::readImageData(inputFile, index);
+            // Read a single MNIST image at 'index'
+            Tensor<double> imageTensor = MNISTReader::readImageData(inputFile, index);
 
-            // Write the image (28x28) to file using the inline function in tensor.hpp
-            writeTensorToFile(image, outputFile);
+            // Write the resulting image tensor to file
+            writeTensorToFile(imageTensor, outputFile);
 
-            std::cout << "Wrote image " << index << " to " << outputFile << "\n";
-        }
-        else if (mode == "label")
-        {
-            // Use your newly added function to read a single label (one-hot) at `index`
-            Tensor<double> labelOneHot = MNISTReader::readLabelData(inputFile, index);
-
-            // Write the 1D, shape={10} tensor to file
-            writeTensorToFile(labelOneHot, outputFile);
-
-            std::cout << "Wrote label " << index << " (one-hot) to " << outputFile << "\n";
+            std::cout << "Successfully wrote image tensor to " << outputFile << std::endl;
         }
         else
         {
-            std::cerr << "Unknown mode: " << mode << "\n";
-            return 1;
-        }
+            // Read a single MNIST label at 'index'
+            Tensor<double> labelTensor = MNISTReader::readLabelData(inputFile, index);
 
-        return 0; // success
+            // Write the resulting label tensor to file
+            writeTensorToFile(labelTensor, outputFile);
+
+            std::cout << "Successfully wrote label tensor to " << outputFile << std::endl;
+        }
     }
     catch (const std::exception& e)
     {
-        std::cerr << "Error: " << e.what() << std::endl;
+        std::cerr << "Error: " << e.what() << "\n";
         return 1;
     }
+
+    return 0;
 }

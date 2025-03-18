@@ -1,101 +1,97 @@
-// mnist_reader.cpp
+#pragma once
 
 #include "mnist_reader.h"
-
 #include <fstream>
-
 #include <iostream>
+#include <stdexcept>
 
-
-
-int MNISTReader::reverseInt(int i) {
-
+int MNISTReader::reverseInt(int i)
+{
     // This function swaps the bytes to handle endianness
-
     unsigned char c1, c2, c3, c4;
-
     c1 = i & 255;
-
     c2 = (i >> 8) & 255;
-
     c3 = (i >> 16) & 255;
-
     c4 = (i >> 24) & 255;
-
     return ((int)c1 << 24) + ((int)c2 << 16) + ((int)c3 << 8) + c4;
-
 }
 
-
-
-// mnist_reader.cpp (continued)
-
-Tensor<double> MNISTReader::readImageData(const std::string& filename, int imageIndex) {
-    // Open the file
+Tensor<double> MNISTReader::readImageData(const std::string& filename, int imageIndex)
+{
     std::ifstream file(filename, std::ios::binary);
-    if (!file.is_open()) {
+    if (!file.is_open())
         throw std::runtime_error("Cannot open file: " + filename);
-    }
 
-    // Read the magic number
     int magicNumber = 0;
-    file.read((char*)&magicNumber, sizeof(magicNumber));
-    magicNumber = reverseInt(magicNumber);
+    file.read(reinterpret_cast<char*>(&magicNumber), 4);
+    magicNumber = reverseInt(magicNumber);  // handle endianness
 
-    // Read number of images
+    // For MNIST images, magicNumber should be 2051
+    if (magicNumber != 2051)
+        throw std::runtime_error("Invalid MNIST image file (magic != 2051)");
+
     int numberOfImages = 0;
-    file.read((char*)&numberOfImages, sizeof(numberOfImages));
+    file.read(reinterpret_cast<char*>(&numberOfImages), 4);
     numberOfImages = reverseInt(numberOfImages);
 
-    // Read number of rows
     int numberOfRows = 0;
-    file.read((char*)&numberOfRows, sizeof(numberOfRows));
+    file.read(reinterpret_cast<char*>(&numberOfRows), 4);
     numberOfRows = reverseInt(numberOfRows);
 
-    // Read number of columns
     int numberOfColumns = 0;
-    file.read((char*)&numberOfColumns, sizeof(numberOfColumns));
+    file.read(reinterpret_cast<char*>(&numberOfColumns), 4);
     numberOfColumns = reverseInt(numberOfColumns);
 
-    // Check if the requested image index is valid
-    if (imageIndex < 0 || imageIndex >= numberOfImages) {
+    // Debug printing
+    std::cout << "Read image file: " << filename << std::endl
+              << "Magic: " << magicNumber
+              << ", #images: " << numberOfImages
+              << ", rows: " << numberOfRows
+              << ", cols: " << numberOfColumns << std::endl;
+
+    // Validate index
+    if (imageIndex < 0 || imageIndex >= numberOfImages)
         throw std::runtime_error("Image index out of range");
-    }
 
-    // Create tensor for single image (28x28)
-    Tensor<double> imageTensor({static_cast<size_t>(numberOfRows), static_cast<size_t>(numberOfColumns)});
+    // Create a 2D tensor shape
+    Tensor<double> imageTensor({
+        static_cast<size_t>(numberOfRows),
+        static_cast<size_t>(numberOfColumns)
+    });
 
-    // Skip to the requested image
-    file.seekg(16 + imageIndex * numberOfRows * numberOfColumns, std::ios::beg);
+    // Seek to the start of the requested image
+    const size_t imageSize = static_cast<size_t>(numberOfRows) * numberOfColumns;
+    // 16 bytes for header; skip to imageIndex
+    file.seekg(16 + imageIndex * imageSize, std::ios::beg);
 
-    // Read the image data
-    unsigned char pixel = 0;
-    for (int r = 0; r < numberOfRows; ++r) {
-        for (int c = 0; c < numberOfColumns; ++c) {
-            file.read((char*)&pixel, 1);
-            // Convert to double in range [0.0, 1.0]
-            imageTensor({static_cast<size_t>(r), static_cast<size_t>(c)}) = static_cast<double>(pixel) / 255.0;
+    // Read each pixel into the 2D tensor
+    for (int r = 0; r < numberOfRows; ++r)
+    {
+        for (int c = 0; c < numberOfColumns; ++c)
+        {
+            unsigned char pixel = 0;
+            file.read(reinterpret_cast<char*>(&pixel), 1);
+            double value = static_cast<double>(pixel) / 255.0; // normalized
+            imageTensor({(size_t)r, (size_t)c}) = value;
         }
     }
 
-    file.close();
+    file.close(); // close after reading
     return imageTensor;
 }
 
 Tensor<double> MNISTReader::readLabelData(const std::string& filename, int labelIndex)
 {
     std::ifstream file(filename, std::ios::binary);
-    if (!file.is_open()) {
+    if (!file.is_open())
         throw std::runtime_error("Cannot open file: " + filename);
-    }
 
     // Read the magic number (should be 2049 for labels)
     int magicNumber = 0;
     file.read(reinterpret_cast<char*>(&magicNumber), sizeof(magicNumber));
     magicNumber = reverseInt(magicNumber);
-    if (magicNumber != 2049) {
+    if (magicNumber != 2049)
         throw std::runtime_error("Invalid label file (magic != 2049)");
-    }
 
     // Number of labels
     int numLabels = 0;
@@ -103,9 +99,8 @@ Tensor<double> MNISTReader::readLabelData(const std::string& filename, int label
     numLabels = reverseInt(numLabels);
 
     // Check range
-    if (labelIndex < 0 || labelIndex >= numLabels) {
+    if (labelIndex < 0 || labelIndex >= numLabels)
         throw std::runtime_error("Label index out of range");
-    }
 
     // Skip to the requested label position.
     // Header is 8 bytes total; each label is 1 byte.
@@ -114,17 +109,16 @@ Tensor<double> MNISTReader::readLabelData(const std::string& filename, int label
     // Read the single label
     unsigned char labelByte = 0;
     file.read(reinterpret_cast<char*>(&labelByte), 1);
-    if (!file.good()) {
+    if (!file.good())
         throw std::runtime_error("Error reading label at index " + std::to_string(labelIndex));
-    }
 
     // Construct one-hot vector for the digit [0..9].
-    // For instance, if labelByte=3, then oneHot = [0,0,0,1,0,0,0,0,0,0].
     Tensor<double> oneHot({10}); // shape = {10}
-    for (int i = 0; i < 10; ++i) {
-        oneHot({static_cast<size_t>(i)}) = 0.0;
+    for (int i = 0; i < 10; ++i)
+    {
+        oneHot({(size_t)i}) = 0.0;
     }
-    oneHot({static_cast<size_t>(labelByte)}) = 1.0;
+    oneHot({(size_t)labelByte}) = 1.0;
 
     file.close();
     return oneHot;

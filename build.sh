@@ -1,35 +1,11 @@
-
-
-#!/bin/bash
-
-
-
-# Create build directory if it doesn't exist
+#build.sh
+echo "This script should build your project now..."
 
 mkdir -p build
-
-
-
-# Go to build directory
-
 cd build
 
-
-
-# Run cmake
-
+#generate makefile
 cmake ..
 
-
-
-# Build the project
-
+#create executable
 make
-
-
-
-# Return to original directory
-
-cd ..
-
-

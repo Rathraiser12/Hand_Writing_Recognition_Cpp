@@ -1,1 +1,13 @@
 # TODO: extend list with suitable entries, e.g. `.vscode`
+.DS_Store
+**/CMakeFiles/
+project_mnist.pdf
+CMakeCache.txt
+build/
+image_out.txt
+label_out.txt
+src/eigen.cpp
+.vs
+.vscode
+gmon.out
+log_predictions-ci.txt
