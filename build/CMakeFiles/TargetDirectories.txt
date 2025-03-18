@@ -1,0 +1,4 @@
+/mnt/d/1_Files/Clion/ws2024-group-17-proj-advpt/build/CMakeFiles/mnist_io.dir
+/mnt/d/1_Files/Clion/ws2024-group-17-proj-advpt/build/CMakeFiles/nn_trainer.dir
+/mnt/d/1_Files/Clion/ws2024-group-17-proj-advpt/build/CMakeFiles/edit_cache.dir
+/mnt/d/1_Files/Clion/ws2024-group-17-proj-advpt/build/CMakeFiles/rebuild_cache.dir

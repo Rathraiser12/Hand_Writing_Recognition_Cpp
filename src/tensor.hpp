@@ -1,20 +1,21 @@
-
 #pragma once
 
+#include <Eigen/Dense>
+#include <cassert>
+#include <fstream>
 #include <iostream>
-#include <memory>
+#include <sstream>
 #include <stdexcept>
 #include <vector>
-#include <utility>
 
-#include <fstream>
-#include <sstream>
-
-inline constexpr size_t flatIdx(const std::vector< size_t >& shape, const std::vector< size_t >& idx)
+//------------------------------
+// Helpers
+//------------------------------
+inline constexpr size_t flatIdx(const std::vector<size_t>& shape,
+                                const std::vector<size_t>& idx)
 {
     assert(shape.size() == idx.size());
-
-    auto rank = idx.size();
+    const size_t rank = idx.size();
 
     if (rank == 0)
     {
@@ -30,7 +31,8 @@ inline constexpr size_t flatIdx(const std::vector< size_t >& shape, const std::v
     }
     else
     {
-        size_t flatIdx = 0;
+        // Fallback for rank > 2 (generic n-d)
+        size_t result = 0;
         for (size_t i = 0; i < rank; i++)
         {
             size_t dimProduct = 1;
@@ -38,14 +40,13 @@ inline constexpr size_t flatIdx(const std::vector< size_t >& shape, const std::v
             {
                 dimProduct *= shape[ii];
             }
-            flatIdx += idx[i] * dimProduct;
+            result += idx[i] * dimProduct;
         }
-
-        return flatIdx;
+        return result;
     }
 }
 
-inline size_t numTensorElements(const std::vector< size_t >& shape)
+inline size_t numTensorElements(const std::vector<size_t>& shape)
 {
     size_t size = 1;
     for (auto d : shape)
@@ -55,379 +56,298 @@ inline size_t numTensorElements(const std::vector< size_t >& shape)
     return size;
 }
 
-template< typename ScalarType >
-ScalarType stringToScalar(const std::string& str)
+template<typename T>
+T stringToScalar(const std::string& str)
 {
     std::stringstream s(str);
-    ScalarType scalar;
+    T scalar;
     s >> scalar;
     return scalar;
 }
 
+//------------------------------
+// Concept
+//------------------------------
+template<class T>
+concept Arithmetic = std::is_arithmetic_v<T>;
 
-template< class T >
-concept Arithmetic = std::is_arithmetic_v< T >;
-
-template< Arithmetic ComponentType >
+//------------------------------
+// Tensor Class
+//------------------------------
+template<Arithmetic ComponentType>
 class Tensor
 {
 public:
-    // Constructs a tensor with rank = 0 and zero-initializes the element.
-    Tensor();
+    Tensor();  // rank=0 constructor
+    Tensor(const std::vector<size_t>& shape);
+    Tensor(const std::vector<size_t>& shape, const ComponentType& fillValue);
 
-    // Constructs a tensor with arbitrary shape and zero-initializes all elements.
-    Tensor(const std::vector< size_t >& shape);
-
-    // Constructs a tensor with arbitrary shape and fills it with the specified value.
-    explicit Tensor(const std::vector< size_t >& shape, const ComponentType& fillValue);
-
-    // Copy-constructor.
-    Tensor(const Tensor< ComponentType >& other);
-
-    // Move-constructor.
-    Tensor(Tensor< ComponentType >&& other) noexcept;
-
-    // Copy-assignment
-    Tensor&
-    operator=(const Tensor< ComponentType >& other);
-
-    // Move-assignment
-    Tensor&
-    operator=(Tensor< ComponentType >&& other) noexcept;
-
-    // Destructor
+    Tensor(const Tensor<ComponentType>& other) = default;            // copy-ctor
+    Tensor(Tensor<ComponentType>&& other) noexcept;                  // move-ctor
+    Tensor<ComponentType>& operator=(const Tensor<ComponentType>&) = default;  // copy-assign
+    Tensor<ComponentType>& operator=(Tensor<ComponentType>&& other) noexcept;  // move-assign
     ~Tensor() = default;
 
-    // Returns the rank of the tensor.
     [[nodiscard]] size_t rank() const;
-
-    // Returns the shape of the tensor.
-    [[nodiscard]] std::vector< size_t > shape() const;
-
-    // Returns the number of elements of this tensor.
+    [[nodiscard]] std::vector<size_t> shape() const;
     [[nodiscard]] size_t numElements() const;
 
-    // Element access function
-    const ComponentType&
-    operator()(const std::vector< size_t >& idx) const;
-
-    // Element mutation function
-    ComponentType&
-    operator()(const std::vector< size_t >& idx);
+    // Read-only element access
+    const ComponentType& operator()(const std::vector<size_t>& idx) const;
+    // Mutable element access
+    ComponentType&       operator()(const std::vector<size_t>& idx);
 
 private:
-
-    std::vector< size_t > shape_;
-    std::vector< ComponentType > data_;
-
+    std::vector<size_t>                              shape_;
+    Eigen::Matrix<ComponentType, Eigen::Dynamic, 1>  data_;
 };
 
-
-template< Arithmetic ComponentType >
-Tensor< ComponentType >::Tensor()
-    : shape_(0), data_(1, 0)
+//------------------------------
+// Implementations
+//------------------------------
+template<Arithmetic ComponentType>
+Tensor<ComponentType>::Tensor()
+    : shape_(0)
+    , data_(1)  // for rank=0, we have exactly one scalar
 {
+    data_(0) = ComponentType(0);
 }
 
-template< Arithmetic ComponentType >
-Tensor< ComponentType >::Tensor(const std::vector< size_t >& shape)
-    : shape_(shape), data_(numTensorElements(shape), 0)
+template<Arithmetic ComponentType>
+Tensor<ComponentType>::Tensor(const std::vector<size_t>& shape)
+    : shape_(shape)
+    , data_(numTensorElements(shape))
 {
+    // Initialize all elements to 0
+    data_.setZero();
 }
 
-template< Arithmetic ComponentType >
-Tensor< ComponentType >::Tensor(const std::vector< size_t >& shape, const ComponentType& fillValue)
-    : shape_(shape), data_(numTensorElements(shape), fillValue)
+template<Arithmetic ComponentType>
+Tensor<ComponentType>::Tensor(const std::vector<size_t>& shape,
+                              const ComponentType& fillValue)
+    : shape_(shape)
+    , data_(numTensorElements(shape))
 {
+    data_.setConstant(fillValue);
 }
 
-// Copy-assignment
-template< Arithmetic ComponentType >
-Tensor< ComponentType >::Tensor(const Tensor< ComponentType >& other) = default;
-
-
-// Move-constructor.
-template< Arithmetic ComponentType >
-Tensor< ComponentType >::Tensor(Tensor< ComponentType >&& other) noexcept
-    : shape_(std::exchange(other.shape_, std::vector< size_t >())), data_(std::exchange(other.data_, {0}))
+// Move constructor
+template<Arithmetic ComponentType>
+Tensor<ComponentType>::Tensor(Tensor<ComponentType>&& other) noexcept
+    : shape_(std::move(other.shape_))
+    , data_(std::move(other.data_))
 {
+    // After move, old object is left in a valid but unspecified state
+    other.shape_.clear();
+    other.data_.resize(1);
+    other.data_(0) = ComponentType(0);
 }
 
-// Copy-assignment
-template< Arithmetic ComponentType >
-Tensor< ComponentType >& Tensor< ComponentType >::operator=(const Tensor< ComponentType >& other) = default;
-
-
-// Move-assignment
-template< Arithmetic ComponentType >
-Tensor< ComponentType >& Tensor< ComponentType >::operator=(Tensor< ComponentType >&& other) noexcept
-
+// Move assignment
+template<Arithmetic ComponentType>
+Tensor<ComponentType>&
+Tensor<ComponentType>::operator=(Tensor<ComponentType>&& other) noexcept
 {
-    shape_ = std::exchange(other.shape_, std::vector< size_t >());
-    data_ = std::exchange(other.data_, {0});
+    if (this != &other)
+    {
+        shape_ = std::move(other.shape_);
+        data_  = std::move(other.data_);
+        // Clean up the moved-from object
+        other.shape_.clear();
+        other.data_.resize(1);
+        other.data_(0) = ComponentType(0);
+    }
     return *this;
 }
 
-template< Arithmetic ComponentType >
-size_t
-Tensor< ComponentType >::rank() const
+template<Arithmetic ComponentType>
+size_t Tensor<ComponentType>::rank() const
 {
     return shape_.size();
 }
 
-template< Arithmetic ComponentType >
-std::vector< size_t >
-Tensor< ComponentType >::shape() const
+template<Arithmetic ComponentType>
+std::vector<size_t> Tensor<ComponentType>::shape() const
 {
     return shape_;
 }
 
-template< Arithmetic ComponentType >
-size_t
-Tensor< ComponentType >::numElements() const
+template<Arithmetic ComponentType>
+size_t Tensor<ComponentType>::numElements() const
 {
     return numTensorElements(shape_);
 }
 
-template< Arithmetic ComponentType >
+template<Arithmetic ComponentType>
 const ComponentType&
-Tensor< ComponentType >::operator()(const std::vector< size_t >& idx) const
+Tensor<ComponentType>::operator()(const std::vector<size_t>& idx) const
 {
-    assert(idx.size() == rank());
-    return data_[flatIdx(shape_, idx)];
+    const size_t linearIndex = flatIdx(shape_, idx);
+    return data_.coeff(linearIndex); // read-only
 }
 
-template< Arithmetic ComponentType >
+template<Arithmetic ComponentType>
 ComponentType&
-Tensor< ComponentType >::operator()(const std::vector< size_t >& idx)
+Tensor<ComponentType>::operator()(const std::vector<size_t>& idx)
 {
-    assert(idx.size() == rank());
-    return data_[flatIdx(shape_, idx)];
+    const size_t linearIndex = flatIdx(shape_, idx);
+    return data_.coeffRef(linearIndex); // writable
 }
 
-
-// Returns true if the shapes and all elements of both tensors are equal.
-template< Arithmetic ComponentType >
-bool operator==(const Tensor< ComponentType >& a, const Tensor< ComponentType >& b)
+//------------------------------
+// Comparison (==)
+//------------------------------
+template<Arithmetic ComponentType>
+bool operator==(const Tensor<ComponentType>& a,
+                const Tensor<ComponentType>& b)
 {
-
     if (a.shape() != b.shape())
-    {
         return false;
-    }
 
-    size_t rank = a.rank();
-    std::vector< size_t > shape = a.shape();
-    size_t numElements = a.numElements();
-
-    bool equal = true;
-
-    if (rank == 0)
+    // Compare all elements
+    for (size_t i = 0; i < a.numElements(); i++)
     {
-        std::vector< size_t > idx(0);
-        return a(idx) == b(idx);
+        if (a({i}) != b({i}))
+            return false;
     }
-    else if (rank == 1)
-    {
-        for (size_t i = 0; i < shape[0]; i++)
-        {
-            std::vector< size_t > idx(1);
-            idx[0] = i;
-            equal &= a(idx) == b(idx);
-        }
-    }
-    else
-    {
-        size_t cnt = 0;
-        std::vector< size_t > idx(rank, 0);
-
-        while (cnt < numElements)
-        {
-            for (size_t i = 0; i < shape[rank - 1]; i++)
-            {
-                equal &= a(idx) == b(idx);
-                idx[rank - 1]++;
-            }
-
-            idx[rank - 1]++;
-
-            for (size_t i = rank - 1; i > 0; i--)
-            {
-                if (idx[i] >= shape[i])
-                {
-                    idx[i] = 0;
-                    idx[i - 1]++;
-                }
-            }
-
-            cnt += shape[rank - 1];
-        }
-    }
-
-    return equal;
+    return true;
 }
 
-// Pretty-prints the tensor to stdout.
-// This is not necessary (and not covered by the tests) but nice to have, also for debugging (and for exercise of course...).
-template< Arithmetic ComponentType >
-std::ostream&
-operator<<(std::ostream& out, const Tensor< ComponentType >& tensor)
+//------------------------------
+// File IO
+//------------------------------
+//
+// We'll handle rank=0,1,2 explicitly. If you need rank>2, you could either
+// implement a generic n-d indexing loop or throw an error. We'll do the latter
+// for brevity.
+
+// Generic helper for reading a single line as a scalar
+template<Arithmetic ComponentType>
+ComponentType readScalarLine(std::ifstream& file)
 {
-
-    if (tensor.rank() == 0)
+    std::string line;
+    if (!std::getline(file, line))
     {
-        std::vector< size_t > idx(0);
-        out << "() [" << tensor(idx) << "]\n";
+        throw std::runtime_error("readTensorFromFile: not enough lines");
     }
-    else if (tensor.rank() == 1)
-    {
-        out << "(:) [";
-        for (size_t i = 0; i < tensor.shape()[0] - 1; i++)
-        {
-            std::vector< size_t > idx(1);
-            idx[0] = i;
-            out << tensor(idx) << " ";
-        }
-        std::vector< size_t > idx(1);
-        idx[0] = tensor.shape()[0] - 1;
-        out << tensor(idx) << "]\n";
-    }
-    else
-    {
-        size_t cnt = 0;
-        std::vector< size_t > idx(tensor.rank(), 0);
-
-        while (cnt < tensor.numElements())
-        {
-            out << "(";
-            for (size_t i = 0; i < tensor.rank() - 1; i++)
-            {
-                out << idx[i] << ", ";
-            }
-            out << ":) [";
-            for (size_t i = 0; i < tensor.shape()[tensor.rank() - 1] - 1; i++)
-            {
-                out << tensor(idx) << " ";
-                idx[tensor.rank() - 1]++;
-            }
-
-            out << tensor(idx) << "]\n";
-            idx[tensor.rank() - 1]++;
-
-            for (size_t i = tensor.rank() - 1; i > 0; i--)
-            {
-                if (idx[i] >= tensor.shape()[i])
-                {
-                    idx[i] = 0;
-                    idx[i - 1]++;
-                }
-            }
-
-            cnt += tensor.shape()[tensor.rank() - 1];
-        }
-    }
-
-    return out;
+    return stringToScalar<ComponentType>(line);
 }
 
-// Reads a tensor from file.
-template< Arithmetic ComponentType >
-Tensor< ComponentType > readTensorFromFile(const std::string& filename)
+template<Arithmetic ComponentType>
+Tensor<ComponentType> readTensorFromFile(const std::string& filename)
 {
-
-    std::ifstream file;
-    file.open(filename);
-
+    std::ifstream file(filename);
     if (!file.is_open())
     {
-        std::cerr << "Could not open file." << std::endl;
+        std::cerr << "Could not open file: " << filename << "\n";
         std::exit(1);
     }
 
+    // 1) Read rank
     std::string line;
-    std::getline(file, line);
+    if (!std::getline(file, line)) {
+        throw std::runtime_error("readTensorFromFile: no rank line found");
+    }
+    size_t rankVal = stringToScalar<size_t>(line);
 
-    auto rank = stringToScalar< size_t >(line);
-
-    std::vector< size_t > shape(rank);
-    for (size_t i = 0; i < rank; i++)
+    // 2) Read shape
+    std::vector<size_t> shp(rankVal);
+    for (size_t i = 0; i < rankVal; i++)
     {
-        std::getline(file, line);
-        shape[i] = stringToScalar< size_t >(line);
+        if (!std::getline(file, line)) {
+            throw std::runtime_error("readTensorFromFile: shape line missing");
+        }
+        shp[i] = stringToScalar<size_t>(line);
     }
 
-    Tensor< ComponentType > tensor(shape);
+    Tensor<ComponentType> tensor(shp);
 
-    if (rank == 0)
+    // 3) Read elements depending on rank
+    if (rankVal == 0)
     {
-        std::getline(file, line);
-        tensor(shape) = stringToScalar< ComponentType >(line);
+        // single scalar
+        tensor({}) = readScalarLine<ComponentType>(file);
+    }
+    else if (rankVal == 1)
+    {
+        size_t total = tensor.numElements();
+        for (size_t i = 0; i < total; i++)
+        {
+            tensor({i}) = readScalarLine<ComponentType>(file);
+        }
+    }
+    else if (rankVal == 2)
+    {
+        // read row-by-row
+        size_t rows = shp[0];
+        size_t cols = shp[1];
+        for (size_t r = 0; r < rows; r++)
+        {
+            for (size_t c = 0; c < cols; c++)
+            {
+                tensor({r, c}) = readScalarLine<ComponentType>(file);
+            }
+        }
     }
     else
     {
-        std::vector< size_t > idx(shape.size(), 0);
-        size_t cnt = 0;
-        while (cnt < tensor.numElements())
-        {
-            std::getline(file, line);
-            tensor(idx) = stringToScalar< ComponentType >(line);
-
-            idx[rank - 1]++;
-            for (size_t i = rank - 1; i > 0; i--)
-            {
-                if (idx[i] >= shape[i])
-                {
-                    idx[i] = 0;
-                    idx[i - 1]++;
-                }
-            }
-
-            cnt++;
-        }
+        throw std::runtime_error("readTensorFromFile: rank>2 not supported in this snippet");
     }
 
     file.close();
     return tensor;
 }
 
-// Writes a tensor to file.
-template< Arithmetic ComponentType >
-void writeTensorToFile(const Tensor< ComponentType >& tensor, const std::string& filename)
+// Write the tensor to file. For rank=2, do row+col iteration
+template<Arithmetic ComponentType>
+void writeTensorToFile(const Tensor<ComponentType>& tensor,
+                       const std::string& filename)
 {
+    std::ofstream file(filename);
+    if (!file.is_open())
+    {
+        std::cerr << "Could not open file for writing: " << filename << "\n";
+        std::exit(1);
+    }
 
-    std::ofstream file;
-    file.open(filename);
-
+    // 1) Write rank
     file << tensor.rank() << "\n";
+    // 2) Write shape
     for (auto d : tensor.shape())
     {
         file << d << "\n";
     }
 
-    if (tensor.rank() == 0)
+    // 3) Write elements
+    size_t rankVal = tensor.rank();
+    if (rankVal == 0)
     {
+        // single scalar
         file << tensor({}) << "\n";
+    }
+    else if (rankVal == 1)
+    {
+        size_t total = tensor.numElements();
+        for (size_t i = 0; i < total; i++)
+        {
+            file << tensor({i}) << "\n";
+        }
+    }
+    else if (rankVal == 2)
+    {
+        size_t rows = tensor.shape()[0];
+        size_t cols = tensor.shape()[1];
+        for (size_t r = 0; r < rows; r++)
+        {
+            for (size_t c = 0; c < cols; c++)
+            {
+                file << tensor({r, c}) << "\n";
+            }
+        }
     }
     else
     {
-        std::vector< size_t > idx(tensor.shape().size(), 0);
-        size_t cnt = 0;
-        while (cnt < tensor.numElements())
-        {
-            file << tensor(idx) << "\n";
-
-            idx[tensor.rank() - 1]++;
-            for (size_t i = tensor.rank() - 1; i > 0; i--)
-            {
-                if (idx[i] >= tensor.shape()[i])
-                {
-                    idx[i] = 0;
-                    idx[i - 1]++;
-                }
-            }
-
-            cnt++;
-        }
+        throw std::runtime_error("writeTensorToFile: rank>2 not supported in this snippet");
     }
 
     file.close();
