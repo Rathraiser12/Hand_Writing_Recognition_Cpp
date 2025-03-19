@@ -102,7 +102,7 @@ public:
         #pragma omp parallel for num_threads(6) ordered
         for (int epoch = 0; epoch < numEpochs; epoch++)
         {
-            #pragma omp parallel for num_threads(6)
+            #pragma omp parallel for num_threads(4)
             for (size_t b = 0; b < numBatches; b++)
             {
                 Eigen::MatrixXd batchImages = trainData.getBatch(b);   // [miniBatchSize x 784]
