@@ -1,6 +1,7 @@
 #pragma once
 
 #include <iostream>
+#include <sstream>
 #include <fstream>
 #include <Eigen/Dense>
 #include <omp.h>  // For optional parallelization
@@ -54,11 +55,12 @@ public:
         : learningRate(lr), numEpochs(nEpochs), batchSize(bSize), hiddenLayerSize(hLayerSize),
           trainDataPath(tDataPath), trainLabelsPath(tLabelsPath),
           testDataPath(tstDataPath), testLabelsPath(tstLabelsPath),
-          predictionLogFilePath(predLogPath), sgd(lr)
+          predictionLogFilePath(predLogPath)
     {
         // Initialize FullyConnected layers with He initialization
         fc1 = FullyConnected(inputSize, hiddenLayerSize);
         fc2 = FullyConnected(hiddenLayerSize, 10);
+        sgd= SGD(lr);
     }
 
     ~NeuralNetwork() {
@@ -99,7 +101,7 @@ public:
 
         for (int epoch = 0; epoch < numEpochs; epoch++)
         {
-            //std::cout << "Epoch " << epoch << " / " << numEpochs << std::endl;
+            std::cout << "Epoch " << epoch << " / " << numEpochs << std::endl;
             
             // Create and shuffle batch indices.
             std::vector<size_t> batchIndices(numBatches);
@@ -114,7 +116,7 @@ public:
 
                 Eigen::MatrixXd predictions = forward(batchImages);
                 double lossVal = celoss.forward(predictions, batchLabels);
-                //std::cout << "  Batch " << b << " loss: " << lossVal << std::endl;
+                std::cout << "  Batch " << b << " loss: " << lossVal << std::endl;
 
                 // Get gradient from loss (combined softmax-crossentropy)
                 Eigen::MatrixXd dLoss = celoss.backward(batchLabels);
@@ -128,48 +130,51 @@ public:
     {
         DataSetImages testDataObj(batchSize);
         testDataObj.readImageData(testDataPath);
-
+    
         DatasetLabels testLabelsObj(batchSize);
         testLabelsObj.readLabelData(testLabelsPath);
-
+    
+        std::ostringstream predictionsBuffer;
+    
+        size_t numTestBatches = testDataObj.getNoOfBatches();
+        int totalSamples = 0;
+        int correctPredictions = 0;
+    
+        for (size_t b = 0; b < numTestBatches; b++)
+        {
+            predictionsBuffer << "Current batch: " << b << "\n";
+            Eigen::MatrixXd batchImages = testDataObj.getBatch(b);
+            Eigen::MatrixXd predictions = forward(batchImages);
+            Eigen::MatrixXd batchLabels = testLabelsObj.getBatch(b);
+    
+            for (int i = 0; i < predictions.rows(); i++)
+            {
+                Eigen::Index predLabel;
+                predictions.row(i).maxCoeff(&predLabel);
+    
+                Eigen::Index actualLabel;
+                batchLabels.row(i).maxCoeff(&actualLabel);
+    
+                predictionsBuffer << " - image " << (b * batchSize + i)
+                                  << ": Prediction=" << predLabel
+                                  << ". Label=" << actualLabel << "\n";
+    
+                totalSamples++;
+                if (predLabel == actualLabel)
+                    correctPredictions++;
+            }
+        }
+    
         std::ofstream predictionLogFile(predictionLogFilePath);
         if (!predictionLogFile.is_open())
         {
             std::cerr << "Error: Cannot open prediction log file: " << predictionLogFilePath << std::endl;
             return;
         }
-
-        size_t numTestBatches = testDataObj.getNoOfBatches();
-        int totalSamples = 0;
-        int correctPredictions = 0;
-
-        //#pragma omp parallel for num_threads(6) ordered
-        for (size_t b = 0; b < numTestBatches; b++)
-        {
-            predictionLogFile << "Current batch: " << b << "\n";
-            Eigen::MatrixXd batchImages = testDataObj.getBatch(b);
-            Eigen::MatrixXd predictions = forward(batchImages);
-            Eigen::MatrixXd batchLabels = testLabelsObj.getBatch(b);
-            //#pragma omp parallel for num_threads(6)
-            for (int i = 0; i < predictions.rows(); i++)
-            {
-                Eigen::Index predLabel;
-                predictions.row(i).maxCoeff(&predLabel);
-
-                Eigen::Index actualLabel;
-                batchLabels.row(i).maxCoeff(&actualLabel);
-
-                predictionLogFile << " - image " << (b * batchSize + i)
-                                  << ": Prediction=" << predLabel
-                                  << ". Label=" << actualLabel << "\n";
-
-                totalSamples++;
-                if (predLabel == actualLabel)
-                    correctPredictions++;
-            }
-        }
+        // Write the entire buffered content at once.
+        predictionLogFile << predictionsBuffer.str();
         predictionLogFile.close();
-
+    
         double accuracy = 100.0 * correctPredictions / totalSamples;
         std::cout << "Test accuracy: " << accuracy << "%" << std::endl;
     }
