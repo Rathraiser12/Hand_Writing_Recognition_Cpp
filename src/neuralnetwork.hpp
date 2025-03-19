@@ -129,6 +129,7 @@ public:
                 Eigen::MatrixXd predictions = forward(batchImages);
                 double lossVal = celoss.forward(predictions, batchLabels);
                 //std::cout << "  Batch " << b << " loss: " << lossVal << std::endl;
+                //rerun the pipelline without loss and batch print
     
                 Eigen::MatrixXd dLoss = celoss.backward(batchLabels);
                 backward(dLoss);
