@@ -7,61 +7,60 @@
 #include <cmath>
 #include <cstdlib>
 
-// FullyConnected layer with bias incorporated
+// FullyConnected layer with bias incorporated.
+// Uses explicit block operations to form an augmented input.
 class FullyConnected
 {
 private:
     Eigen::MatrixXd weights; // shape: (input_size + 1) x output_size
     size_t input_size;
     size_t output_size;
-    double range;
 
-    // Cache the augmented input (with bias column) for backward pass
+    // Cache the augmented input (with bias column) for backward pass.
     Eigen::MatrixXd input_tensor;
 
 public:
     FullyConnected() {}
     FullyConnected(size_t in, size_t out) : input_size(in), output_size(out)
     {
-        // He initialization: typically for ReLU you want bounds based on in
-        range = 1.0 / std::sqrt(input_size);
-        // weights: (in + 1) x out, with an extra row for bias
-        weights = Eigen::MatrixXd::Random(input_size + 1, output_size) * range;
+        // Use He (Kaiming) uniform initialization for non-bias weights.
+        weights.resize(input_size + 1, output_size);
+        weights.topRows(input_size) = heUniformInit(input_size, output_size);
+        // Initialize bias row to zeros.
+        weights.row(input_size).setZero();
     }
 
-    // Optional setter for testing
+    // Setter for weights (useful for testing)
     void setWeights(const Eigen::MatrixXd &w) {
         weights = w;
     }
 
     // Forward pass:
-    // Input: Matrix [batch_size x input_size]
-    // Output: Matrix [batch_size x output_size]
+    // Input: [batch_size x input_size]
+    // Augment input with a column of ones to account for bias.
+    // Output: [batch_size x output_size]
     Eigen::MatrixXd forward(const Eigen::MatrixXd &input) {
         size_t batch_size = input.rows();
-        // Create augmented input: first input_size columns from input, last column = ones (for bias)
         input_tensor.resize(batch_size, input_size + 1);
+        // Copy input into first columns.
         input_tensor.block(0, 0, batch_size, input_size) = input;
+        // Set last column to ones (bias).
         input_tensor.col(input_size) = Eigen::VectorXd::Ones(batch_size);
-        // Multiply: [batch_size x (input_size+1)] * [(input_size+1) x output_size] 
+        // Compute output.
         Eigen::MatrixXd output = input_tensor * weights;
         return output;
     }
 
     // Backward pass:
-    // error_tensor: gradient from next layer [batch_size x output_size]
+    // error_tensor: [batch_size x output_size]
     // Returns: gradient for previous layer [batch_size x input_size] (excluding bias derivative)
     Eigen::MatrixXd backward(const Eigen::MatrixXd &error_tensor, SGD &sgd) {
-        // Compute gradient w.r.t. weights: (input_tensor^T [ (in+1) x batch_size ] * error_tensor [batch_size x out])
         Eigen::MatrixXd gradient_weights = input_tensor.transpose() * error_tensor;
-        // Update weights using SGD
+        // Compute propagated error using the current weights (exclude bias row)
+        Eigen::MatrixXd propagated_error = error_tensor * weights.topRows(input_size).transpose();
+        // Update weights after computing the propagated error.
         weights = sgd.updateWeights(weights, gradient_weights);
-        // Compute error for previous layer:
-        // next_error = error_tensor * weights^T gives shape [batch_size x (input_size+1)]
-        Eigen::MatrixXd next_error = error_tensor * weights.transpose();
-        // Exclude the bias column: return only the first 'input_size' columns
-        Eigen::MatrixXd next_error_no_bias = next_error.leftCols(input_size);
-        return next_error_no_bias;
+        return propagated_error;
     }
 
     ~FullyConnected() {}

@@ -1,4 +1,4 @@
-#pragma once
+
 
 #include "mnist_reader.h"
 #include <fstream>
