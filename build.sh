@@ -1,11 +1,11 @@
-#build.sh
+#!/bin/bash
 echo "This script should build your project now..."
 
 mkdir -p build
 cd build
 
-#generate makefile
-cmake ..
+# Generate Makefiles with Release mode
+cmake -DCMAKE_BUILD_TYPE=Release ..
 
-#create executable
+# Create executable
 make
