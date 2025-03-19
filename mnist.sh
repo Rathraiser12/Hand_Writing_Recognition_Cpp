@@ -26,6 +26,6 @@ do
 done < "$1"
 
 
-
+# ./mnist.sh mnist-configs/input.config
 # Run the build/mnist executable with the appropriate arguments
 ./build/nn_trainer $learning_rate $num_epochs $batch_size $hidden_size $rel_path_train_images $rel_path_train_labels $rel_path_test_images $rel_path_test_labels $rel_path_log_file

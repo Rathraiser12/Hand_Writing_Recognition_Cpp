@@ -12,3 +12,4 @@ src/eigen.cpp
 gmon.out
 log_predictions-ci.txt
 log_predictions.txt
+compute_accuracy.py

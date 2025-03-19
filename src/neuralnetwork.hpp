@@ -3,14 +3,16 @@
 #include <iostream>
 #include <fstream>
 #include <Eigen/Dense>
+#include <omp.h>
 
 #include "loss.hpp"
 #include "optimizers.hpp"
-#include "relu.hpp"
+#include "relu.hpp"      // Make sure the filename matches exactly (case-sensitive)
 #include "softmax.hpp"
 #include "fullyconnected.hpp"
 #include "data.hpp"
 #include "label.hpp"
+
 
 class NeuralNetwork
 {
@@ -21,6 +23,7 @@ private:
     int hiddenLayerSize;
     int inputSize = 784; // MNIST images (28x28)
 
+    // Layers
     FullyConnected fc1;  // [784 -> hiddenLayerSize]
     FullyConnected fc2;  // [hiddenLayerSize -> 10]
 
@@ -29,6 +32,7 @@ private:
     CrossEntropyLoss celoss;
     SGD sgd;
 
+    // File paths
     std::string trainDataPath;
     std::string trainLabelsPath;
     std::string testDataPath;
@@ -48,18 +52,21 @@ public:
         : learningRate(lr), numEpochs(nEpochs), batchSize(bSize), hiddenLayerSize(hLayerSize),
           trainDataPath(tDataPath), trainLabelsPath(tLabelsPath),
           testDataPath(tstDataPath), testLabelsPath(tstLabelsPath),
-          predictionLogFilePath(predLogPath), sgd(lr)
+          predictionLogFilePath(predLogPath)
     {
-        // Initialize FullyConnected layers with He initialization inside their constructors.
+        // Initialize FullyConnected layers with He initialization in their constructors.
         fc1 = FullyConnected(inputSize, hiddenLayerSize);
         fc2 = FullyConnected(hiddenLayerSize, 10);
+        sgd=SGD(lr);
     }
 
     ~NeuralNetwork() {
-        // Destructor (if any cleanup is needed)
+        // Cleanup, if necessary.
     }
 
-    // Forward pass through FC1 -> ReLU -> FC2 -> Softmax
+    // Forward pass through FC1 -> ReLU -> FC2 -> Softmax.
+    // Input: [batch_size x 784]
+    // Output: [batch_size x 10]
     Eigen::MatrixXd forward(const Eigen::MatrixXd &inputTensor)
     {
         Eigen::MatrixXd out_fc1 = fc1.forward(inputTensor);
@@ -69,17 +76,19 @@ public:
         return out_softmax;
     }
 
-    // Backward pass: softmax -> FC2 -> ReLU -> FC1
-    Eigen::MatrixXd backward(const Eigen::MatrixXd &errorTensor)
+    // Backward pass: Uses the gradient from loss (which is (yhat - y)/N)
+    // and propagates it through FC2, ReLU, and FC1.
+    // Input: dLoss, shape [batch_size x 10]
+    // Returns: gradient for previous layers (not typically used).
+    Eigen::MatrixXd backward(const Eigen::MatrixXd &dLoss)
     {
-        Eigen::MatrixXd grad_softmax = softmax.backward(errorTensor);
-        Eigen::MatrixXd grad_fc2 = fc2.backward(grad_softmax, sgd);
+        Eigen::MatrixXd grad_fc2 = fc2.backward(dLoss, sgd);
         Eigen::MatrixXd grad_relu = relu.backward(grad_fc2);
         Eigen::MatrixXd grad_fc1 = fc1.backward(grad_relu, sgd);
         return grad_fc1;
     }
 
-    // Train the network using the provided training data and labels
+    // Training routine: Loads training data, runs forward and backward passes over epochs.
     void train()
     {
         DataSetImages trainData(batchSize);
@@ -90,25 +99,27 @@ public:
 
         size_t numBatches = trainData.getNoOfBatches();
 
+        #pragma omp parallel for num_threads(6) ordered
         for (int epoch = 0; epoch < numEpochs; epoch++)
         {
+            #pragma omp parallel for num_threads(6)
             for (size_t b = 0; b < numBatches; b++)
             {
-                Eigen::MatrixXd batchImages = trainData.getBatch(b);
-                Eigen::MatrixXd batchLabels = trainLabels.getBatch(b);
+                Eigen::MatrixXd batchImages = trainData.getBatch(b);   // [miniBatchSize x 784]
+                Eigen::MatrixXd batchLabels = trainLabels.getBatch(b); // [miniBatchSize x 10]
 
                 Eigen::MatrixXd predictions = forward(batchImages);
-
                 double lossVal = celoss.forward(predictions, batchLabels);
-                // Optionally print or log the loss
+                // Optionally log the loss.
 
                 Eigen::MatrixXd dLoss = celoss.backward(batchLabels);
                 backward(dLoss);
+                std::cout<<" - Batch: "<< b <<". Loss: "<< lossVal <<std::endl;
             }
         }
     }
 
-    // Test the network and log predictions to file
+    // Testing routine: Loads test data, runs forward passes, and logs predictions.
     void test()
     {
         DataSetImages testDataObj(batchSize);
@@ -125,7 +136,6 @@ public:
         }
 
         size_t numTestBatches = testDataObj.getNoOfBatches();
-
         for (size_t b = 0; b < numTestBatches; b++)
         {
             predictionLogFile << "Current batch: " << b << "\n";

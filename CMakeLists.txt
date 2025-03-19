@@ -29,17 +29,15 @@ target_include_directories(mnist_io PRIVATE
 # ---------------------------
 add_executable(nn_trainer
     src/test_train_model.cpp  # new main for training
-    # Possibly add other .cpp files that define your neural network code, e.g.:
-    # src/fullyconnected.cpp
-    # src/softmax.cpp
-    # src/relu.cpp
-    # src/neuralnetwork.cpp
-    # src/optimizers.cpp
-    # src/loss.cpp
-    # ...
+ 
 )
 
 target_include_directories(nn_trainer PRIVATE
     "${CMAKE_SOURCE_DIR}/src"
     "${CMAKE_SOURCE_DIR}/include"
 )
+find_package(OpenMP)
+if (OPENMP_FOUND)
+    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+    set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
+endif()
