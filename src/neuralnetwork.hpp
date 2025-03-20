@@ -54,38 +54,38 @@ public:
         std::cout << "Total training time: " << elapsed.count() << " seconds\n";
     }
 
-    void test() {
-        // Use the integrated data loader for test data.
-        MNISTDataLoader testLoader(test_data_path, test_labels_path, batch_size);
-        testLoader.loadDataset();
-        std::ostringstream buffer;
-        int total = 0, correct = 0;
-        for (size_t b = 0; b < testLoader.getNumBatches(); ++b) {
-            // Print the header with the exact expected text:
-            buffer << "Current batch: " << b << "\n";
-            Eigen::MatrixXd images = testLoader.getImageBatch(b);
-            Eigen::MatrixXd predictions = forward(images);
-            Eigen::MatrixXd labels = testLoader.getLabelBatch(b);
-            for (int i = 0; i < predictions.rows(); ++i) {
-                Eigen::Index pred, actual;
-                predictions.row(i).maxCoeff(&pred);
-                labels.row(i).maxCoeff(&actual);
-                buffer << " - image " << (b * batch_size + i)
-                       << ": Prediction=" << pred << ". Label=" << actual << "\n";
-                ++total;
-                if (pred == actual)
-                    ++correct;
-            }
+void test() {
+    // Use the integrated data loader for test data.
+    MNISTDataLoader testLoader(test_data_path, test_labels_path, batch_size);
+    testLoader.loadDataset();
+    std::ostringstream buffer;
+    int total = 0, correct = 0;
+    for (size_t b = 0; b < testLoader.getNumBatches(); ++b) {
+        // Print the header with the exact expected text:
+        buffer << "Current batch: " << b << "\n";
+        Eigen::MatrixXd images = testLoader.getImageBatch(b);
+        Eigen::MatrixXd predictions = forward(images);
+        Eigen::MatrixXd labels = testLoader.getLabelBatch(b);
+        for (int i = 0; i < predictions.rows(); ++i) {
+            Eigen::Index pred, actual;
+            predictions.row(i).maxCoeff(&pred);
+            labels.row(i).maxCoeff(&actual);
+            buffer << " - image " << (b * batch_size + i)
+                   << ": Prediction=" << pred << ". Label=" << actual << "\n";
+            ++total;
+            if (pred == actual)
+                ++correct;
         }
-        std::ofstream logFile(log_file_path);
-        if (!logFile.is_open()) {
-            std::cerr << "Error: Cannot open log file: " << log_file_path << "\n";
-            return;
-        }
-        logFile << buffer.str();
-        logFile.close();
-        std::cout << "Test accuracy: " << 100.0 * correct / total << "%\n";
     }
+    std::ofstream logFile(log_file_path);
+    if (!logFile.is_open()) {
+        std::cerr << "Error: Cannot open log file: " << log_file_path << "\n";
+        return;
+    }
+    logFile << buffer.str();
+    logFile.close();
+    std::cout << "Test accuracy: " << 100.0 * correct / total << "%\n";
+}
 
     Eigen::MatrixXd forward(const Eigen::MatrixXd &input) {
         Eigen::MatrixXd a1 = fc1.forward(input);
