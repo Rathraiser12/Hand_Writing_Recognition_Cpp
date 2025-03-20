@@ -64,7 +64,7 @@ public:
         std::ostringstream buffer;
         int total = 0, correct = 0;
         for (size_t b = 0; b < testImages.getBatchCount(); ++b) {
-            buffer << "Batch " << b << "\n";
+            buffer << "Current batch: " << b << "\n";
             Eigen::MatrixXd images = testImages.getBatch(b);
             Eigen::MatrixXd predictions = forward(images);
             Eigen::MatrixXd labels = testLabels.getBatch(b);
