@@ -1,108 +1,70 @@
 #pragma once
-
 #include <iostream>
-#include <memory>
 #include <fstream>
 #include <vector>
 #include <algorithm>
 #include <cstring>
 #include <Eigen/Dense>
 
-class DatasetLabels
-{
-private:
-    size_t batch_size_;
-    size_t number_of_labels_;
-    std::vector<Eigen::MatrixXd> batches_;
-
+class DatasetLabels {
 public:
-    explicit DatasetLabels(size_t batch_size);
-    ~DatasetLabels();
+    explicit DatasetLabels(size_t batchSize)
+        : batch_size(batchSize), num_labels(0) {}
 
     void readLabelData(const std::string &filepath);
     void writeLabelToFile(const std::string &filepath, size_t index);
-    Eigen::MatrixXd getBatch(size_t index);
-    size_t getNumBatches() const { return batches_.size(); }
+    Eigen::MatrixXd getBatch(size_t index) const { return batches.at(index); }
+    size_t getBatchCount() const { return batches.size(); }
+
+private:
+    size_t batch_size, num_labels;
+    std::vector<Eigen::MatrixXd> batches;
 };
 
-DatasetLabels::DatasetLabels(size_t batch_size)
-    : batch_size_(batch_size), number_of_labels_(0)
-{}
-
-DatasetLabels::~DatasetLabels() {}
-
-Eigen::MatrixXd DatasetLabels::getBatch(size_t index)
-{
-    return batches_[index];
-}
-
-void DatasetLabels::readLabelData(const std::string &input_filepath)
-{
-    std::ifstream input_file(input_filepath, std::ios::binary);
-    if (!input_file.is_open()) {
-        std::cerr << "Unable to open file " << input_filepath << std::endl;
+void DatasetLabels::readLabelData(const std::string &filepath) {
+    std::ifstream in(filepath, std::ios::binary);
+    if (!in.is_open()) {
+        std::cerr << "Unable to open file " << filepath << "\n";
         return;
     }
+    char buffer[4];
+    in.read(buffer, 4); std::reverse(buffer, buffer + 4);
+    int magic = 0; std::memcpy(&magic, buffer, sizeof(int));
 
-    char bin_data[4];
-    // Magic number
-    input_file.read(bin_data, 4);
-    std::reverse(bin_data, bin_data + 4);
-    int magic_number = 0;
-    std::memcpy(&magic_number, bin_data, sizeof(int));
+    in.read(buffer, 4); std::reverse(buffer, buffer + 4);
+    std::memcpy(&num_labels, buffer, sizeof(int));
 
-    // Number of labels
-    input_file.read(bin_data, 4);
-    std::reverse(bin_data, bin_data + 4);
-    int number_of_labels = 0;
-    std::memcpy(&number_of_labels, bin_data, sizeof(int));
-    number_of_labels_ = number_of_labels;
-
-    // Build batches: each batch is [batch_size_ x 10]
-    Eigen::MatrixXd label_matrix(batch_size_, 10);
-    label_matrix.setZero();
-    size_t batchFillCount = 0;
-
-    for(size_t i = 0; i < number_of_labels_; i++)
-    {
+    Eigen::MatrixXd labelMatrix(batch_size, 10);
+    labelMatrix.setZero();
+    size_t fillCount = 0;
+    for (size_t i = 0; i < num_labels; ++i) {
         uint8_t byte = 0;
-        input_file.read(reinterpret_cast<char *>(&byte), 1);
-        int label = static_cast<int>(byte);
-        label_matrix(batchFillCount, label) = 1.0;
-        batchFillCount++;
-
-        if(batchFillCount == batch_size_ || (i == number_of_labels_ - 1))
-        {
-            size_t validRows = batchFillCount;
-            batches_.push_back(label_matrix.topRows(validRows));
-            label_matrix.setZero();
-            batchFillCount = 0;
+        in.read(reinterpret_cast<char*>(&byte), 1);
+        labelMatrix(fillCount, byte) = 1.0;
+        fillCount++;
+        if (fillCount == batch_size || i == num_labels - 1) {
+            batches.push_back(labelMatrix.topRows(fillCount));
+            labelMatrix.setZero();
+            fillCount = 0;
         }
     }
-    input_file.close();
+    in.close();
 }
 
-void DatasetLabels::writeLabelToFile(const std::string &output_filepath, size_t index)
-{
-    size_t batch_no = index / batch_size_;
-    size_t row_in_batch = index % batch_size_;
-
-    if (batch_no >= batches_.size() || row_in_batch >= batches_[batch_no].rows()) {
-        std::cerr << "Index out of range." << std::endl;
+void DatasetLabels::writeLabelToFile(const std::string &filepath, size_t index) {
+    size_t batch_no = index / batch_size;
+    size_t row_in_batch = index % batch_size;
+    if (batch_no >= batches.size() || row_in_batch >= batches[batch_no].rows()) {
+        std::cerr << "Index out of range.\n";
         return;
     }
-
-    std::ofstream output_file(output_filepath);
-    if(!output_file.is_open()) {
-        std::cerr << "Unable to open file " << output_filepath << std::endl;
+    std::ofstream out(filepath);
+    if (!out.is_open()) {
+        std::cerr << "Unable to open file " << filepath << "\n";
         return;
     }
-
-    output_file << 1 << "\n"; // rank
-    output_file << 10 << "\n"; // shape
-
-    for(int i = 0; i < 10; i++) {
-        output_file << batches_[batch_no](row_in_batch, i) << "\n";
-    }
-    output_file.close();
+    out << 1 << "\n" << 10 << "\n";
+    for (int i = 0; i < 10; ++i)
+        out << batches[batch_no](row_in_batch, i) << "\n";
+    out.close();
 }
