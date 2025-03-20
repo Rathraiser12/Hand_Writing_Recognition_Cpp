@@ -73,7 +73,7 @@ public:
                 predictions.row(i).maxCoeff(&pred);
                 labels.row(i).maxCoeff(&actual);
                 buffer << " - image " << (b * batch_size + i)
-                       << ": Prediction=" << pred << ", Label=" << actual << "\n";
+                       << ": Prediction=" << pred << ". Label=" << actual << "\n";
                 ++total;
                 if (pred == actual)
                     ++correct;
