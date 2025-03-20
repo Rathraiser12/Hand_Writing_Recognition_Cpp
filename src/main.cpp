@@ -20,7 +20,9 @@ int main(int argc, char **argv) {
                    (inputFile.find("idx3-ubyte") != std::string::npos);
     try {
         if (isImage) {
+            // Read a single image using the integrated loader.
             Eigen::MatrixXd imageMat = MNISTDataLoader::readSingleImage(inputFile, index);
+            // Create a Tensor with the same dimensions as imageMat.
             std::vector<size_t> shape = { static_cast<size_t>(imageMat.rows()), static_cast<size_t>(imageMat.cols()) };
             Tensor<double> imageTensor(shape);
             for (size_t r = 0; r < shape[0]; ++r)
@@ -29,12 +31,24 @@ int main(int argc, char **argv) {
             writeTensorToFile(imageTensor, outputFile);
             std::cout << "Successfully wrote image tensor to " << outputFile << "\n";
         } else {
+            // Read a single label using the integrated loader.
             Eigen::MatrixXd labelMat = MNISTDataLoader::readSingleLabel(inputFile, index);
-            std::vector<size_t> shape = { static_cast<size_t>(labelMat.rows()), static_cast<size_t>(labelMat.cols()) };
+            // If labelMat has one column, treat it as a 1D vector.
+            std::vector<size_t> shape;
+            if (labelMat.cols() == 1)
+                shape = { static_cast<size_t>(labelMat.rows()) };
+            else
+                shape = { static_cast<size_t>(labelMat.rows()), static_cast<size_t>(labelMat.cols()) };
+            
             Tensor<double> labelTensor(shape);
-            for (size_t r = 0; r < shape[0]; ++r)
-                for (size_t c = 0; c < shape[1]; ++c)
-                    labelTensor({ r, c }) = labelMat(r, c);
+            if (labelMat.cols() == 1) {
+                for (size_t i = 0; i < shape[0]; ++i)
+                    labelTensor({ i }) = labelMat(i, 0);
+            } else {
+                for (size_t r = 0; r < shape[0]; ++r)
+                    for (size_t c = 0; c < shape[1]; ++c)
+                        labelTensor({ r, c }) = labelMat(r, c);
+            }
             writeTensorToFile(labelTensor, outputFile);
             std::cout << "Successfully wrote label tensor to " << outputFile << "\n";
         }
