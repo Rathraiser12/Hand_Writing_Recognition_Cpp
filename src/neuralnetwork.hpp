@@ -14,8 +14,7 @@
 #include "relu.hpp"
 #include "softmax.hpp"
 #include "fullyconnected.hpp"
-#include "data.hpp"
-#include "label.hpp"
+#include "mnist_data_loader.hpp"  // Integrated loader for images & labels
 
 class NeuralNetwork {
 public:
@@ -32,19 +31,18 @@ public:
 
     void train() {
         auto start = std::chrono::steady_clock::now();
-        DataSetImages trainImages(batch_size);
-        trainImages.readImageData(train_data_path);
-        DatasetLabels trainLabels(batch_size);
-        trainLabels.readLabelData(train_labels_path);
-        size_t numBatches = trainImages.getBatchCount();
+        // Use the integrated data loader for training data.
+        MNISTDataLoader trainLoader(train_data_path, train_labels_path, batch_size);
+        trainLoader.loadDataset();
+        size_t numBatches = trainLoader.getNumBatches();
         for (int epoch = 0; epoch < num_epochs; ++epoch) {
             std::cout << "Epoch " << epoch << " / " << num_epochs << "\n";
             std::vector<size_t> indices(numBatches);
             std::iota(indices.begin(), indices.end(), 0);
             std::shuffle(indices.begin(), indices.end(), std::default_random_engine(epoch));
             for (auto idx : indices) {
-                Eigen::MatrixXd images = trainImages.getBatch(idx);
-                Eigen::MatrixXd labels = trainLabels.getBatch(idx);
+                Eigen::MatrixXd images = trainLoader.getImageBatch(idx);
+                Eigen::MatrixXd labels = trainLoader.getLabelBatch(idx);
                 Eigen::MatrixXd predictions = forward(images);
                 double loss = loss_.forward(predictions, labels);
                 Eigen::MatrixXd dLoss = loss_.backward(labels);
@@ -57,17 +55,17 @@ public:
     }
 
     void test() {
-        DataSetImages testImages(batch_size);
-        testImages.readImageData(test_data_path);
-        DatasetLabels testLabels(batch_size);
-        testLabels.readLabelData(test_labels_path);
+        // Use the integrated data loader for test data.
+        MNISTDataLoader testLoader(test_data_path, test_labels_path, batch_size);
+        testLoader.loadDataset();
         std::ostringstream buffer;
         int total = 0, correct = 0;
-        for (size_t b = 0; b < testImages.getBatchCount(); ++b) {
+        for (size_t b = 0; b < testLoader.getNumBatches(); ++b) {
+            // Print the header with the exact expected text:
             buffer << "Current batch: " << b << "\n";
-            Eigen::MatrixXd images = testImages.getBatch(b);
+            Eigen::MatrixXd images = testLoader.getImageBatch(b);
             Eigen::MatrixXd predictions = forward(images);
-            Eigen::MatrixXd labels = testLabels.getBatch(b);
+            Eigen::MatrixXd labels = testLoader.getLabelBatch(b);
             for (int i = 0; i < predictions.rows(); ++i) {
                 Eigen::Index pred, actual;
                 predictions.row(i).maxCoeff(&pred);

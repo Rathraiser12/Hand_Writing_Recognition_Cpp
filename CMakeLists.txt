@@ -18,17 +18,21 @@ if (OPENMP_FOUND)
   set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
 endif()
 
+# Target for single image/label I/O (used by your read dataset scripts)
+# This target now uses src/main.cpp and src/mnist_data_loader.cpp.
 add_executable(mnist_io
   src/main.cpp
-  src/mnist_reader.cpp
+  src/mnist_data_loader.cpp
 )
 target_include_directories(mnist_io PRIVATE
   "${CMAKE_SOURCE_DIR}/src"
   "${CMAKE_SOURCE_DIR}/include"
 )
 
+# Target for neural network training/testing using the integrated loader.
 add_executable(nn_trainer
   src/test_train_model.cpp
+  src/mnist_data_loader.cpp
 )
 target_include_directories(nn_trainer PRIVATE
   "${CMAKE_SOURCE_DIR}/src"

@@ -1,8 +1,8 @@
 #include <iostream>
 #include <string>
 #include <stdexcept>
-#include "mnist_reader.h"
-#include "tensor.hpp"
+#include "mnist_data_loader.hpp"  // Using the integrated loader
+#include "tensor.hpp"             // Your custom Tensor class
 
 int main(int argc, char **argv) {
     if (argc != 4) {
@@ -20,11 +20,21 @@ int main(int argc, char **argv) {
                    (inputFile.find("idx3-ubyte") != std::string::npos);
     try {
         if (isImage) {
-            Tensor<double> imageTensor = MNISTReader::readImageData(inputFile, index);
+            Eigen::MatrixXd imageMat = MNISTDataLoader::readSingleImage(inputFile, index);
+            std::vector<size_t> shape = { static_cast<size_t>(imageMat.rows()), static_cast<size_t>(imageMat.cols()) };
+            Tensor<double> imageTensor(shape);
+            for (size_t r = 0; r < shape[0]; ++r)
+                for (size_t c = 0; c < shape[1]; ++c)
+                    imageTensor({ r, c }) = imageMat(r, c);
             writeTensorToFile(imageTensor, outputFile);
             std::cout << "Successfully wrote image tensor to " << outputFile << "\n";
         } else {
-            Tensor<double> labelTensor = MNISTReader::readLabelData(inputFile, index);
+            Eigen::MatrixXd labelMat = MNISTDataLoader::readSingleLabel(inputFile, index);
+            std::vector<size_t> shape = { static_cast<size_t>(labelMat.rows()), static_cast<size_t>(labelMat.cols()) };
+            Tensor<double> labelTensor(shape);
+            for (size_t r = 0; r < shape[0]; ++r)
+                for (size_t c = 0; c < shape[1]; ++c)
+                    labelTensor({ r, c }) = labelMat(r, c);
             writeTensorToFile(labelTensor, outputFile);
             std::cout << "Successfully wrote label tensor to " << outputFile << "\n";
         }

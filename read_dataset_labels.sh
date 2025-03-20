@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-
 # Usage:
 #   ./read_dataset_labels.sh <label_dataset_input> <label_tensor_output> <label_index>
 # Example:
@@ -19,4 +18,5 @@ echo "Reading label data from $LABEL_DATASET_INPUT..."
 echo "Saving output to $LABEL_TENSOR_OUTPUT"
 echo "Label index: $LABEL_INDEX"
 
+# Make sure that mnist_io has been built and the path is correct.
 ./build/mnist_io "$LABEL_DATASET_INPUT" "$LABEL_TENSOR_OUTPUT" "$LABEL_INDEX"
